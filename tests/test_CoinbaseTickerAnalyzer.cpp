@@ -66,7 +66,7 @@ TEST_F(CoinbaseTickerAnalyzerTest, GetStatistics) {
     
     EXPECT_FALSE(stats.empty());
     EXPECT_TRUE(stats.find("ETH-USD") != std::string::npos);
-    EXPECT_TRUE(stats.find("custom_output.csv") != std::string::npos);
+    EXPECT_TRUE(stats.find("test_analyzer_output.csv") != std::string::npos);
     EXPECT_TRUE(stats.find("Running: No") != std::string::npos);
 }
 

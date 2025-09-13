@@ -46,7 +46,7 @@ TEST_F(EMACalculatorTest, FirstMidPriceUpdate) {
     
     double ema = calculator->updateMidPriceEMA(midPrice, now);
     
-    EXPECT_TRUE(calculator->isPriceInitialized());
+    EXPECT_TRUE(calculator->isMidPriceInitialized());
     EXPECT_EQ(ema, midPrice);
     EXPECT_EQ(calculator->getMidPriceEMA(), midPrice);
 }
