@@ -46,7 +46,7 @@ This C++ application subscribes to Coinbase ticker data via WebSockets, calculat
 - Created subscription message generation
 - Added timestamp parsing for ISO 8601 format
 
-### 6. CSV Logger (CSVLogger)
+### 6. Async CSV Logger (AsyncCSVLogger)
 - Implemented thread-safe CSV logging
 - Added automatic header generation
 - Implemented proper CSV field escaping for special characters

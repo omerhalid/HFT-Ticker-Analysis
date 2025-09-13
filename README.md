@@ -62,7 +62,7 @@ The application is built with a modular, object-oriented design:
 - **WebSocketClient**: Handles real-time WebSocket connections
 - **JSONParser**: Processes incoming ticker messages
 - **EMACalculator**: Calculates 5-second interval EMAs
-- **CSVLogger**: Thread-safe CSV file logging
+- **AsyncCSVLogger**: Asynchronous CSV file logging
 - **TickerData**: Data structure for ticker information
 
 ## Multithreading
@@ -199,6 +199,6 @@ rm -rf build && mkdir build && cd build && cmake .. && make
 
 - Adjust EMA interval in `EMACalculator` constructor
 - Modify queue size in `CoinbaseTickerAnalyzer`
-- Tune CSV flush frequency in `CSVLogger`
+- Tune CSV flush frequency in `AsyncCSVLogger`
 
 For more detailed information, see `IMPLEMENTATION_STEPS.txt`.

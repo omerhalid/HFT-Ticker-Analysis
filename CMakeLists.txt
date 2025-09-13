@@ -31,7 +31,6 @@ set(SOURCES
     src/main.cpp
     src/CoinbaseTickerAnalyzer.cpp
     src/EMACalculator.cpp
-    src/CSVLogger.cpp
     src/AsyncCSVLogger.cpp
     src/WebSocketClient.cpp
     src/JSONParser.cpp
@@ -43,7 +42,6 @@ set(SOURCES
 set(HEADERS
     include/CoinbaseTickerAnalyzer.h
     include/EMACalculator.h
-    include/CSVLogger.h
     include/AsyncCSVLogger.h
     include/WebSocketClient.h
     include/JSONParser.h
