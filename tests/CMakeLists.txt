@@ -19,9 +19,11 @@ add_executable(tests
     ${CMAKE_SOURCE_DIR}/src/EMACalculator.cpp
     ${CMAKE_SOURCE_DIR}/src/JSONParser.cpp
     ${CMAKE_SOURCE_DIR}/src/CSVLogger.cpp
+    ${CMAKE_SOURCE_DIR}/src/AsyncCSVLogger.cpp
     ${CMAKE_SOURCE_DIR}/src/TickerData.cpp
     ${CMAKE_SOURCE_DIR}/src/CoinbaseTickerAnalyzer.cpp
     ${CMAKE_SOURCE_DIR}/src/WebSocketClient.cpp
+    ${CMAKE_SOURCE_DIR}/src/ThreadUtils.cpp
 )
 
 # Include directories

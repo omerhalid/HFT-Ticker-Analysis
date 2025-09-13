@@ -9,6 +9,7 @@
 #include <thread>
 #include <cstring>
 #include "JSONParser.h"
+#include "ThreadUtils.h"
 
 // Static instance for callback access
 static WebSocketClient* g_instance = nullptr;
@@ -166,11 +167,20 @@ bool WebSocketClient::subscribeToTicker(const std::string& productId) {
 }
 
 void WebSocketClient::runIO() {
+    // Optimize thread for HFT
+    ThreadUtils::optimizeForHFT("WebSocketIO", 1, 99);
+    
     while (m_running.load()) {
-        int result = lws_service(m_context, 50); // 50ms timeout
+        // Zero timeout for maximum responsiveness
+        int result = lws_service(m_context, 0); // 0ms timeout for low latency
         if (result < 0) {
             std::cerr << "libwebsockets service error" << std::endl;
             break;
+        }
+        
+        // Yield CPU if no work to prevent busy waiting
+        if (result == 0) {
+            std::this_thread::yield();
         }
     }
 }

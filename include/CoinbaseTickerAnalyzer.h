@@ -10,14 +10,12 @@
 #include <memory>
 #include <thread>
 #include <atomic>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
 #include "WebSocketClient.h"
 #include "JSONParser.h"
 #include "EMACalculator.h"
-#include "CSVLogger.h"
+#include "AsyncCSVLogger.h"
 #include "TickerData.h"
+#include "LockFreeRingBuffer.h"
 
 /**
  * @brief Main application class for Coinbase ticker analysis
@@ -34,13 +32,12 @@ private:
     // Core components
     std::unique_ptr<WebSocketClient> m_websocketClient;    ///< WebSocket client
     std::unique_ptr<EMACalculator> m_emaCalculator;       ///< EMA calculator
-    std::unique_ptr<CSVLogger> m_csvLogger;               ///< CSV logger
+    std::unique_ptr<AsyncCSVLogger> m_csvLogger;          ///< Async CSV logger
     
     // Threading components
     std::thread m_dataProcessingThread;                   ///< Data processing thread
-    std::queue<TickerData> m_dataQueue;                   ///< Queue for ticker data
-    std::mutex m_queueMutex;                              ///< Mutex for queue access
-    std::condition_variable m_queueCondition;             ///< Condition variable for queue
+    static constexpr size_t DATA_BUFFER_SIZE = 4096;     ///< Size of data buffer (power of 2)
+    LockFreeRingBuffer<TickerData, DATA_BUFFER_SIZE> m_dataQueue; ///< Lock-free queue for ticker data
     std::atomic<bool> m_running;                          ///< Application running status
     std::atomic<bool> m_processingEnabled;                ///< Data processing enabled flag
     

@@ -6,6 +6,7 @@
 #include "CoinbaseTickerAnalyzer.h"
 #include <iostream>
 #include <chrono>
+#include "ThreadUtils.h"
 
 CoinbaseTickerAnalyzer::CoinbaseTickerAnalyzer(const std::string& productId, 
                                              const std::string& csvFilename)
@@ -30,8 +31,8 @@ bool CoinbaseTickerAnalyzer::initializeComponents() {
         // Initialize EMA calculator
         m_emaCalculator = std::make_unique<EMACalculator>(5); // 5-second interval
         
-        // Initialize CSV logger
-        m_csvLogger = std::make_unique<CSVLogger>(m_csvFilename);
+        // Initialize async CSV logger
+        m_csvLogger = std::make_unique<AsyncCSVLogger>(m_csvFilename);
         
         if (!m_csvLogger->isReady()) {
             std::cerr << "Failed to initialize CSV logger" << std::endl;
@@ -47,9 +48,6 @@ bool CoinbaseTickerAnalyzer::initializeComponents() {
 
 void CoinbaseTickerAnalyzer::cleanupComponents() {
     m_processingEnabled.store(false);
-    
-    // Notify processing thread to wake up
-    m_queueCondition.notify_all();
     
     // Wait for processing thread to finish
     if (m_dataProcessingThread.joinable()) {
@@ -70,35 +68,32 @@ void CoinbaseTickerAnalyzer::handleWebSocketMessage(const std::string& message) 
     TickerData tickerData;
     
     if (JSONParser::parseTickerMessage(message, tickerData)) {
-        // Add to processing queue
-        {
-            std::lock_guard<std::mutex> lock(m_queueMutex);
+        // Non-blocking push to lock-free queue
+        if (!m_dataQueue.push(tickerData)) {
+            // Queue full - drop oldest entry to make space
+            TickerData dummy;
+            m_dataQueue.pop(dummy);
             m_dataQueue.push(tickerData);
         }
-        
-        // Notify processing thread
-        m_queueCondition.notify_one();
     }
 }
 
 void CoinbaseTickerAnalyzer::processDataThread() {
+    // Optimize thread for HFT
+    ThreadUtils::optimizeForHFT("DataProcessor", 2, 99);
+    
     while (m_processingEnabled.load()) {
-        std::unique_lock<std::mutex> lock(m_queueMutex);
+        TickerData data;
         
-        // Wait for data or shutdown signal
-        m_queueCondition.wait(lock, [this] {
-            return !m_dataQueue.empty() || !m_processingEnabled.load();
-        });
-        
-        // Process all available data
-        while (!m_dataQueue.empty() && m_processingEnabled.load()) {
-            TickerData data = m_dataQueue.front();
-            m_dataQueue.pop();
-            lock.unlock();
-            
-            processTickerData(data);
-            
-            lock.lock();
+        // Busy poll for maximum responsiveness
+        while (m_processingEnabled.load()) {
+            if (m_dataQueue.pop(data)) {
+                processTickerData(data);
+            } else {
+                // No data available, yield briefly to prevent busy waiting
+                std::this_thread::yield();
+                break;
+            }
         }
     }
 }

@@ -32,9 +32,11 @@ set(SOURCES
     src/CoinbaseTickerAnalyzer.cpp
     src/EMACalculator.cpp
     src/CSVLogger.cpp
+    src/AsyncCSVLogger.cpp
     src/WebSocketClient.cpp
     src/JSONParser.cpp
     src/TickerData.cpp
+    src/ThreadUtils.cpp
 )
 
 # Header files
@@ -42,9 +44,12 @@ set(HEADERS
     include/CoinbaseTickerAnalyzer.h
     include/EMACalculator.h
     include/CSVLogger.h
+    include/AsyncCSVLogger.h
     include/WebSocketClient.h
     include/JSONParser.h
     include/TickerData.h
+    include/LockFreeRingBuffer.h
+    include/ThreadUtils.h
 )
 
 # Create executable
