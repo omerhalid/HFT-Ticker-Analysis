@@ -28,6 +28,8 @@ A high-performance C++ application that subscribes to Coinbase ticker data via W
 ./docker-run.sh -p ETH-USD -o ticker_data.csv
 ```
 
+**Prerequisites:** Docker (install from [docker.com](https://docs.docker.com/get-docker/))
+
 ### Manual Build
 ```bash
 # Install dependencies: cmake, libssl-dev, libwebsockets-dev, pkg-config
@@ -65,6 +67,16 @@ make test
 
 # Run specific test
 ./tests/tests --gtest_filter="EMACalculatorTest.*"
+```
+
+## Documentation
+
+```bash
+# Generate HTML documentation
+make docs
+
+# Open documentation in browser
+open build/docs/html/index.html
 ```
 
 ## Output Format
