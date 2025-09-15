@@ -37,12 +37,16 @@ target_link_libraries(tests
     gtest
     gtest_main
     ${LIBCURL_LIBRARIES}
-    /opt/homebrew/Cellar/libwebsockets/4.4.1/lib/libwebsockets.dylib
+    ${LIBWEBSOCKETS_LIBRARIES}
     OpenSSL::SSL
     OpenSSL::Crypto
     nlohmann_json::nlohmann_json
     ${CMAKE_THREAD_LIBS_INIT}
 )
+
+# Add include directories and link directories for pkg-config
+target_include_directories(tests PRIVATE ${LIBCURL_INCLUDE_DIRS} ${LIBWEBSOCKETS_INCLUDE_DIRS})
+target_link_directories(tests PRIVATE ${LIBCURL_LIBRARY_DIRS} ${LIBWEBSOCKETS_LIBRARY_DIRS})
 
 # Add test to CTest
 include(GoogleTest)
