@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 project(CoinbaseTickerAnalyzer VERSION 1.0.0 LANGUAGES CXX)
 
 # Set C++ standard
@@ -15,6 +16,11 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
 pkg_check_modules(LIBWEBSOCKETS REQUIRED libwebsockets)
 find_package(OpenSSL REQUIRED)
+
+# Ensure LIBWEBSOCKETS_LIBRARIES is set correctly
+if(NOT LIBWEBSOCKETS_LIBRARIES)
+    set(LIBWEBSOCKETS_LIBRARIES websockets)
+endif()
 
 # Include directories
 include_directories(include)
@@ -58,12 +64,16 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE 
     Threads::Threads
     ${LIBCURL_LIBRARIES}
-    /opt/homebrew/Cellar/libwebsockets/4.4.1/lib/libwebsockets.dylib
+    ${LIBWEBSOCKETS_LIBRARIES}
     OpenSSL::SSL
     OpenSSL::Crypto
     nlohmann_json::nlohmann_json
     ${CMAKE_THREAD_LIBS_INIT}
 )
+
+# Add include directories and link directories for pkg-config
+target_include_directories(${PROJECT_NAME} PRIVATE ${LIBCURL_INCLUDE_DIRS} ${LIBWEBSOCKETS_INCLUDE_DIRS})
+target_link_directories(${PROJECT_NAME} PRIVATE ${LIBCURL_LIBRARY_DIRS} ${LIBWEBSOCKETS_LIBRARY_DIRS})
 
 # Enable testing
 enable_testing()

@@ -15,8 +15,8 @@ AsyncCSVLogger::AsyncCSVLogger(const std::string& filename)
     , m_ready(false) {
     
     // Open file
-    m_file = std::make_unique<std::ofstream>(filename, std::ios::out | std::ios::app);
-    if (!m_file->is_open()) {
+    m_file.open(filename, std::ios::out | std::ios::app);
+    if (!m_file.is_open()) {
         std::cerr << "Error: Could not open CSV file: " << filename << std::endl;
         return;
     }
@@ -42,15 +42,15 @@ AsyncCSVLogger::~AsyncCSVLogger() {
 }
 
 void AsyncCSVLogger::writeHeaders() {
-    if (!m_file || !m_file->is_open() || m_headersWritten) {
+    if (!m_file.is_open() || m_headersWritten) {
         return;
     }
     
-    *m_file << "type,sequence,product_id,price,open_24h,volume_24h,low_24h,high_24h,"
-            << "volume_30d,best_bid,best_ask,side,time,trade_id,last_size,"
-            << "price_ema,mid_price_ema,mid_price" << std::endl;
+    m_file << "type,sequence,product_id,price,open_24h,volume_24h,low_24h,high_24h,"
+           << "volume_30d,best_bid,best_ask,side,time,trade_id,last_size,"
+           << "price_ema,mid_price_ema,mid_price" << std::endl;
     
-    m_file->flush();
+    m_file.flush();
     m_headersWritten = true;
 }
 
@@ -86,7 +86,7 @@ void AsyncCSVLogger::logThreadFunction() {
         
         // Process all available data
         while (m_logQueue.pop(data)) {
-            if (!m_file || !m_file->is_open()) {
+            if (!m_file.is_open()) {
                 break;
             }
             
@@ -96,12 +96,12 @@ void AsyncCSVLogger::logThreadFunction() {
             }
             
             // Write data
-            *m_file << data.toCSV() << std::endl;
+            m_file << data.toCSV() << std::endl;
         }
         
         // Flush periodically
-        if (m_file && m_file->is_open()) {
-            m_file->flush();
+        if (m_file.is_open()) {
+            m_file.flush();
         }
         
         // Brief sleep to prevent busy waiting
@@ -111,16 +111,16 @@ void AsyncCSVLogger::logThreadFunction() {
     // Process remaining data before shutdown
     TickerData data;
     while (m_logQueue.pop(data)) {
-        if (m_file && m_file->is_open()) {
+        if (m_file.is_open()) {
             if (!m_headersWritten) {
                 writeHeaders();
             }
-            *m_file << data.toCSV() << std::endl;
+            m_file << data.toCSV() << std::endl;
         }
     }
     
-    if (m_file && m_file->is_open()) {
-        m_file->flush();
+    if (m_file.is_open()) {
+        m_file.flush();
     }
 }
 
@@ -141,7 +141,7 @@ bool AsyncCSVLogger::logTickerData(const TickerData& data) {
 }
 
 bool AsyncCSVLogger::isReady() const {
-    return m_ready.load() && m_file && m_file->is_open();
+    return m_ready.load() && m_file.is_open();
 }
 
 bool AsyncCSVLogger::isRunning() const {
@@ -164,9 +164,9 @@ void AsyncCSVLogger::close() {
         m_logThread.join();
     }
     
-    if (m_file && m_file->is_open()) {
-        m_file->flush();
-        m_file->close();
+    if (m_file.is_open()) {
+        m_file.flush();
+        m_file.close();
     }
 }
 

@@ -10,10 +10,10 @@
 
 CoinbaseTickerAnalyzer::CoinbaseTickerAnalyzer(const std::string& productId, 
                                              const std::string& csvFilename)
-    : m_productId(productId)
-    , m_csvFilename(csvFilename)
-    , m_running(false)
-    , m_processingEnabled(false) {
+    : m_running(false)
+    , m_processingEnabled(false)
+    , m_productId(productId)
+    , m_csvFilename(csvFilename) {
 }
 
 CoinbaseTickerAnalyzer::~CoinbaseTickerAnalyzer() {

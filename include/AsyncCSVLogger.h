@@ -24,7 +24,7 @@
 class AsyncCSVLogger {
 private:
     std::string m_filename;                                    ///< Output CSV filename
-    std::unique_ptr<std::ofstream> m_file;                     ///< Output file stream
+    std::ofstream m_file;                                      ///< Output file stream
     bool m_headersWritten;                                     ///< Whether CSV headers have been written
     
     // Lock-free ring buffer for async logging

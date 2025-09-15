@@ -1,2 +1,24 @@
-build
+# Build directories
+build/
+cmake-build-*/
+
+# Generated files
+*.csv
+*.log
+
+# Docker output
+output/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
