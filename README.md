@@ -8,7 +8,6 @@ A high-performance C++ application that subscribes to Coinbase ticker data via W
 - **EMA calculations** for price and mid-price with 5-second intervals
 - **Asynchronous CSV logging** with lock-free data structures
 - **Multithreaded architecture** optimized for low latency
-- **Comprehensive test suite** with 40 unit tests
 
 ## Requirements
 
