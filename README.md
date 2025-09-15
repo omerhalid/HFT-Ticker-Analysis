@@ -25,10 +25,11 @@ A high-performance C++ application that subscribes to Coinbase ticker data via W
 ./docker-run.sh
 
 # Run with custom options
-./docker-run.sh -p ETH-USD -o ticker_data.csv
+./docker-run.sh -p ETH-USD -o output/eth_data.csv
 ```
 
 **Prerequisites:** Docker (install from [docker.com](https://docs.docker.com/get-docker/))
+**Output:** CSV files will appear in the `output/` directory on your local machine.
 
 ### Manual Build
 ```bash

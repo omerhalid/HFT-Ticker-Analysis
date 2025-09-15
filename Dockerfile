@@ -9,5 +9,8 @@ WORKDIR /app
 COPY . .
 RUN ./build.sh
 
+# Create output directory
+RUN mkdir -p /app/output
+
 # Default command
-CMD ["./build/CoinbaseTickerAnalyzer"]
+CMD ["./build/CoinbaseTickerAnalyzer", "-o", "/app/output/ticker_data.csv"]
