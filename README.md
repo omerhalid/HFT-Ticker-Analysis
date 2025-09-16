@@ -65,8 +65,6 @@ The application uses a multithreaded architecture with lock-free data structures
 # Run all tests
 make test
 
-# Run specific test
-./tests/tests --gtest_filter="EMACalculatorTest.*"
 ```
 
 ## Documentation
