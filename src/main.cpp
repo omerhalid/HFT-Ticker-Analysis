@@ -70,6 +70,9 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: --output requires a value" << std::endl;
                 return 1;
             }
+        } else if (arg == "--") {
+            // Docker separator - ignore and continue
+            continue;
         } else {
             std::cerr << "Error: Unknown argument " << arg << std::endl;
             printUsage(argv[0]);

@@ -13,4 +13,5 @@ RUN ./build.sh
 RUN mkdir -p /app/output
 
 # Default command
-CMD ["./build/CoinbaseTickerAnalyzer", "-o", "/app/output/ticker_data.csv"]
+ENTRYPOINT ["./build/CoinbaseTickerAnalyzer"]
+CMD ["-o", "/app/output/ticker_data.csv"]
