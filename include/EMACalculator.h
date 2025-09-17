@@ -7,18 +7,17 @@
 #define EMACALCULATOR_H
 
 #include <chrono>
-#include <mutex>
 #include <atomic>
 
 /**
  * @brief Class for calculating Exponential Moving Average (EMA)
  * 
- * This class provides thread-safe EMA calculations for price and mid-price data
- * with a configurable time interval. Uses a 5-second interval by default.
+ * This class provides lock-free EMA calculations for price and mid-price data
+ * with a configurable time interval. Uses atomic operations for thread safety
+ * without blocking. Uses a 5-second interval by default.
  */
 class EMACalculator {
 private:
-    std::mutex m_mutex;                                    ///< Mutex for thread safety
     std::chrono::seconds m_interval;                       ///< EMA calculation interval
     
     // EMA values

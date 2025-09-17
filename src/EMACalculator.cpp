@@ -41,8 +41,6 @@ bool EMACalculator::shouldUpdateMidPrice(const std::chrono::system_clock::time_p
 }
 
 double EMACalculator::updatePriceEMA(double price, const std::chrono::system_clock::time_point& currentTime) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
     if (!shouldUpdatePrice(currentTime)) {
         return m_priceEMA.load();
     }
@@ -61,8 +59,6 @@ double EMACalculator::updatePriceEMA(double price, const std::chrono::system_clo
 }
 
 double EMACalculator::updateMidPriceEMA(double midPrice, const std::chrono::system_clock::time_point& currentTime) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
     if (!shouldUpdateMidPrice(currentTime)) {
         return m_midPriceEMA.load();
     }
@@ -89,7 +85,6 @@ double EMACalculator::getMidPriceEMA() const {
 }
 
 void EMACalculator::reset() {
-    std::lock_guard<std::mutex> lock(m_mutex);
     m_priceEMA.store(0.0);
     m_midPriceEMA.store(0.0);
     m_priceInitialized = false;
