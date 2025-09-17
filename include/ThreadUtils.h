@@ -9,7 +9,10 @@
 #include <string>
 
 /**
- * @brief Simple utility class for thread optimization
+ * @brief Cross-platform utility class for thread optimization
+ * 
+ * Provides HFT-optimized thread configuration across Linux, macOS, and Windows.
+ * Sets thread name, CPU affinity, and high priority for low-latency performance.
  */
 class ThreadUtils {
 public:
@@ -19,6 +22,11 @@ public:
      * @param cpuCore CPU core to bind to (default: 0)
      * @param priority Priority level (default: 99)
      * @return Always returns true 
+     * 
+     * Platform-specific behavior:
+     * - Linux: Uses prctl, pthread_setaffinity_np, SCHED_FIFO
+     * - macOS: Uses pthread_setname_np, thread_affinity_policy, QOS_CLASS_USER_INTERACTIVE
+     * - Windows: Uses SetThreadDescription, SetThreadAffinityMask, SetThreadPriority
      */
     static bool optimizeForHFT(const std::string& threadName, int cpuCore = 0, int priority = 99);
 };
