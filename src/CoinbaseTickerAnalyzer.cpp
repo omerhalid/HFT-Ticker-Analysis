@@ -9,6 +9,7 @@
 #include <chrono>
 #include "ThreadUtils.h"
 #include "HighResTimer.h"
+#include "BranchPrediction.h"
 #ifdef __linux__
 #include "NUMAUtils.h"
 #endif
@@ -82,10 +83,12 @@ void CoinbaseTickerAnalyzer::cleanupComponents() {
 void CoinbaseTickerAnalyzer::handleWebSocketMessage(const std::string& message) {
     TickerData tickerData;
     
-    if (JSONParser::parseTickerMessage(message, tickerData)) {
+    // Parse success is likely for valid ticker messages
+    if (LIKELY(JSONParser::parseTickerMessage(message, tickerData))) {
         // Non-blocking push to lock-free queue
-        if (!m_dataQueue.push(tickerData)) {
-            // Queue full - drop oldest entry to make space
+        // Push success is likely in normal operation
+        if (UNLIKELY(!m_dataQueue.push(tickerData))) {
+            // Queue full - drop oldest entry to make space (unlikely)
             TickerData dummy;
             m_dataQueue.pop(dummy);
             m_dataQueue.push(tickerData);
@@ -98,13 +101,14 @@ void CoinbaseTickerAnalyzer::processDataThread() {
     // Use CPU 2 (or auto-select based on NUMA topology)
     ThreadUtils::optimizeForHFT("DataProcessor", 2, 99);
     
-    while (m_processingEnabled.load()) {
+    while (LIKELY(m_processingEnabled.load())) {
         TickerData data;
         bool hadData = false;
         
         // Batch process for efficiency
-        while (m_processingEnabled.load()) {
-            if (m_dataQueue.pop(data)) {
+        while (LIKELY(m_processingEnabled.load())) {
+            // Pop success is likely when actively processing
+            if (LIKELY(m_dataQueue.pop(data))) {
                 processTickerData(data);
                 hadData = true;
             } else {
@@ -112,8 +116,8 @@ void CoinbaseTickerAnalyzer::processDataThread() {
             }
         }
         
-        // Brief pause if no data to prevent busy waiting
-        if (!hadData) {
+        // Brief pause if no data to prevent busy waiting (unlikely when busy)
+        if (UNLIKELY(!hadData)) {
             // Use high-resolution sleep for microsecond precision
             #ifdef __linux__
             HighResTimer::sleepMicros(10); // 10 microseconds
@@ -142,17 +146,20 @@ void CoinbaseTickerAnalyzer::processTickerData(TickerData& data) {
                   << " Mid-Price EMA: " << data.mid_price_ema << std::endl;
                   
     } catch (const std::exception& e) {
+        // Exceptions are unlikely in normal operation
         std::cerr << "Error processing ticker data: " << e.what() << std::endl;
     }
 }
 
 bool CoinbaseTickerAnalyzer::start() {
-    if (m_running.load()) {
+    // Already running check - unlikely
+    if (UNLIKELY(m_running.load())) {
         std::cout << "Analyzer is already running" << std::endl;
         return true;
     }
     
-    if (!initializeComponents()) {
+    // Initialization success is likely
+    if (UNLIKELY(!initializeComponents())) {
         return false;
     }
     
@@ -162,7 +169,8 @@ bool CoinbaseTickerAnalyzer::start() {
     
     // Connect to Coinbase WebSocket
     const std::string coinbaseUri = "wss://ws-feed.exchange.coinbase.com";
-    if (!m_websocketClient->connect(coinbaseUri)) {
+    // Connection success is likely
+    if (UNLIKELY(!m_websocketClient->connect(coinbaseUri))) {
         std::cerr << "Failed to connect to Coinbase WebSocket" << std::endl;
         cleanupComponents();
         return false;
@@ -176,7 +184,8 @@ bool CoinbaseTickerAnalyzer::start() {
     #endif
     
     // Subscribe to ticker channel
-    if (!m_websocketClient->subscribeToTicker(m_productId)) {
+    // Subscription success is likely
+    if (UNLIKELY(!m_websocketClient->subscribeToTicker(m_productId))) {
         std::cerr << "Failed to subscribe to ticker channel" << std::endl;
         cleanupComponents();
         return false;
@@ -191,7 +200,8 @@ bool CoinbaseTickerAnalyzer::start() {
 }
 
 void CoinbaseTickerAnalyzer::stop() {
-    if (!m_running.load()) {
+    // Already stopped check - unlikely
+    if (UNLIKELY(!m_running.load())) {
         return;
     }
     

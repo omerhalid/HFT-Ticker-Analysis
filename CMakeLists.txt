@@ -87,6 +87,7 @@ set(HEADERS
     include/ThreadUtils.h
     include/HighResTimer.h
     include/NUMAUtils.h
+    include/BranchPrediction.h
 )
 
 # Create executable

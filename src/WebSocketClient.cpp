@@ -11,6 +11,7 @@
 #include "JSONParser.h"
 #include "ThreadUtils.h"
 #include "HighResTimer.h"
+#include "BranchPrediction.h"
 
 // Static instance for callback access
 static WebSocketClient* g_instance = nullptr;
@@ -149,7 +150,8 @@ bool WebSocketClient::isRunning() const {
 }
 
 bool WebSocketClient::sendMessage(const std::string& message) {
-    if (!m_connected.load() || !m_wsi) {
+    // Connected and valid WSI are likely in normal operation
+    if (UNLIKELY(!m_connected.load() || !m_wsi)) {
         return false;
     }
     
@@ -173,16 +175,17 @@ void WebSocketClient::runIO() {
     ThreadUtils::optimizeForHFT("WebSocketIO", 1, 99);
     #endif
     
-    while (m_running.load()) {
+    while (LIKELY(m_running.load())) {
         // Zero timeout for maximum responsiveness
         int result = lws_service(m_context, 0); // 0ms timeout for low latency
-        if (result < 0) {
+        // Service errors are unlikely
+        if (UNLIKELY(result < 0)) {
             std::cerr << "libwebsockets service error" << std::endl;
             break;
         }
         
-        // Brief pause if no work to prevent busy waiting
-        if (result == 0) {
+        // Brief pause if no work to prevent busy waiting (unlikely when active)
+        if (UNLIKELY(result == 0)) {
             #ifdef __linux__
             HighResTimer::sleepMicros(10); // 10 microseconds
             #else
@@ -195,7 +198,8 @@ void WebSocketClient::runIO() {
 int WebSocketClient::callback(struct lws* wsi, enum lws_callback_reasons reason,
                               void* user, void* in, size_t len) {
     WebSocketClient* client = getInstance(user);
-    if (!client) {
+    // Client should always be valid
+    if (UNLIKELY(!client)) {
         return -1;
     }
     
@@ -206,9 +210,10 @@ int WebSocketClient::callback(struct lws* wsi, enum lws_callback_reasons reason,
             break;
             
         case LWS_CALLBACK_CLIENT_RECEIVE:
-            if (in && len > 0) {
+            // Receive callback is the hot path - most common case
+            if (LIKELY(in && len > 0)) {
                 std::string message(static_cast<char*>(in), len);
-                if (client->m_messageCallback) {
+                if (LIKELY(client->m_messageCallback)) {
                     client->m_messageCallback(message);
                 }
             }
@@ -217,7 +222,8 @@ int WebSocketClient::callback(struct lws* wsi, enum lws_callback_reasons reason,
         case LWS_CALLBACK_CLIENT_WRITEABLE:
             {
                 std::lock_guard<std::mutex> lock(client->m_sendMutex);
-                if (!client->m_pendingMessage.empty()) {
+                // Pending message is likely when writeable callback is triggered
+                if (LIKELY(!client->m_pendingMessage.empty())) {
                     unsigned char* buf = new unsigned char[LWS_PRE + client->m_pendingMessage.length()];
                     memcpy(buf + LWS_PRE, client->m_pendingMessage.c_str(), client->m_pendingMessage.length());
                     
@@ -226,7 +232,8 @@ int WebSocketClient::callback(struct lws* wsi, enum lws_callback_reasons reason,
                     delete[] buf;
                     client->m_pendingMessage.clear();
                     
-                    if (result < 0) {
+                    // Write errors are unlikely
+                    if (UNLIKELY(result < 0)) {
                         return -1;
                     }
                 }

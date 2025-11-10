@@ -4,6 +4,7 @@
  */
 
 #include "HighResTimer.h"
+#include "BranchPrediction.h"
 #include <iostream>
 #include <thread>
 #include <cmath>
@@ -24,7 +25,8 @@ double HighResTimer::s_tscFrequencyGHz = 0.0;
 int64_t HighResTimer::s_tscOffset = 0;
 
 void HighResTimer::initialize() {
-    if (s_initialized) {
+    // Already initialized check - unlikely after first call
+    if (UNLIKELY(s_initialized)) {
         return;
     }
     
@@ -81,7 +83,8 @@ void HighResTimer::initializeRDTSC() {
 
 uint64_t HighResTimer::nowCycles() {
 #if HAVE_RDTSC
-    if (!s_initialized) {
+    // Initialization check - unlikely after first call
+    if (UNLIKELY(!s_initialized)) {
         initialize();
     }
     return readTSC();
@@ -92,10 +95,12 @@ uint64_t HighResTimer::nowCycles() {
 
 int64_t HighResTimer::cyclesToNanos(uint64_t cycles) {
 #if HAVE_RDTSC
-    if (!s_initialized) {
+    // Initialization check - unlikely after first call
+    if (UNLIKELY(!s_initialized)) {
         initialize();
     }
-    if (s_tscFrequencyGHz > 0.0) {
+    // RDTSC available is likely on x86/x86_64
+    if (LIKELY(s_tscFrequencyGHz > 0.0)) {
         // Convert cycles to nanoseconds: cycles / (cycles per nanosecond)
         return static_cast<int64_t>(static_cast<double>(cycles) / s_tscFrequencyGHz);
     }
@@ -105,11 +110,13 @@ int64_t HighResTimer::cyclesToNanos(uint64_t cycles) {
 
 int64_t HighResTimer::nowNanos() {
 #if HAVE_RDTSC
-    if (!s_initialized) {
+    // Initialization check - unlikely after first call
+    if (UNLIKELY(!s_initialized)) {
         initialize();
     }
     
-    if (s_tscFrequencyGHz > 0.0) {
+    // RDTSC available is likely on x86/x86_64
+    if (LIKELY(s_tscFrequencyGHz > 0.0)) {
         // Use RDTSC for ultra-low latency (no system call)
         uint64_t cycles = readTSC();
         return static_cast<int64_t>(static_cast<double>(cycles) / s_tscFrequencyGHz) + s_tscOffset;
@@ -168,15 +175,18 @@ void HighResTimer::sleepNanos(int64_t nanos) {
     }
     
     // For very short durations, use busy-wait with RDTSC for precision
-    if (nanos < 10000) { // Less than 10 microseconds
+    // Short sleeps are likely in HFT applications
+    if (LIKELY(nanos < 10000)) { // Less than 10 microseconds
 #if HAVE_RDTSC
-        if (s_tscFrequencyGHz > 0.0) {
+        // RDTSC available is likely on x86/x86_64
+        if (LIKELY(s_tscFrequencyGHz > 0.0)) {
             // Use RDTSC for precise busy-wait
             uint64_t targetCycles = static_cast<uint64_t>(static_cast<double>(nanos) * s_tscFrequencyGHz);
             uint64_t startCycles = readTSC();
             uint64_t target = startCycles + targetCycles;
             
-            while (readTSC() < target) {
+            // Loop condition is likely to be true initially
+            while (LIKELY(readTSC() < target)) {
                 // Busy-wait with CPU pause instruction
                 _mm_pause();
             }

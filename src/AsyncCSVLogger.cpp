@@ -5,6 +5,7 @@
 
 #include "AsyncCSVLogger.h"
 #include "ThreadUtils.h"
+#include "BranchPrediction.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -52,7 +53,8 @@ AsyncCSVLogger::AsyncCSVLogger(const std::string& filename,
     
     // Open file
     m_file.open(filename, std::ios::out | std::ios::app);
-    if (!m_file.is_open()) {
+    // File open success is likely
+    if (UNLIKELY(!m_file.is_open())) {
         std::cerr << "Error: Could not open CSV file: " << filename << std::endl;
         return;
     }
@@ -68,7 +70,8 @@ AsyncCSVLogger::AsyncCSVLogger(const std::string& filename,
         HighResTimer::sleepMicros(100); // Sleep 100 microseconds
     }
     
-    if (!m_ready.load()) {
+    // Thread ready check - unlikely to fail
+    if (UNLIKELY(!m_ready.load())) {
         std::cerr << "Warning: AsyncCSVLogger thread did not start properly" << std::endl;
     }
 }
@@ -78,12 +81,14 @@ AsyncCSVLogger::~AsyncCSVLogger() {
 }
 
 void AsyncCSVLogger::writeHeaders() {
-    if (!m_file.is_open()) {
+    // File open check - likely to be open
+    if (UNLIKELY(!m_file.is_open())) {
         return;
     }
     
     bool expected = false;
-    if (!m_headersWritten.compare_exchange_strong(expected, true)) {
+    // Headers already written is unlikely (only first time)
+    if (UNLIKELY(!m_headersWritten.compare_exchange_strong(expected, true))) {
         return; // Headers already written
     }
     
@@ -131,18 +136,19 @@ void AsyncCSVLogger::logThreadFunction() {
     int64_t lastFlushTime = HighResTimer::nowMicros();
     const int64_t FLUSH_INTERVAL_MICROS = 10000; // Flush every 10ms
     
-    while (m_running.load()) {
+    while (LIKELY(m_running.load())) {
         TickerData data;
         bool hadData = false;
         
         // Process all available data (batch processing for efficiency)
-        while (m_logQueue.pop(data)) {
-            if (!m_file.is_open()) {
+        // Likely to have data when actively logging
+        while (LIKELY(m_logQueue.pop(data))) {
+            if (UNLIKELY(!m_file.is_open())) {
                 break;
             }
             
-            // Write headers if not already written
-            if (!m_headersWritten.load()) {
+            // Write headers if not already written (unlikely after first write)
+            if (UNLIKELY(!m_headersWritten.load())) {
                 writeHeaders();
             }
             
@@ -154,18 +160,19 @@ void AsyncCSVLogger::logThreadFunction() {
         }
         
         // Flush periodically (not on every write for performance)
-        if (hadData) {
+        if (LIKELY(hadData)) {
             int64_t now = HighResTimer::nowMicros();
-            if (now - lastFlushTime >= FLUSH_INTERVAL_MICROS) {
-                if (m_file.is_open()) {
+            // Flush interval check - unlikely to flush every iteration
+            if (UNLIKELY(now - lastFlushTime >= FLUSH_INTERVAL_MICROS)) {
+                if (LIKELY(m_file.is_open())) {
                     m_file.flush();
                 }
                 lastFlushTime = now;
             }
         }
         
-        // Brief pause if no data to prevent busy waiting
-        if (!hadData) {
+        // Brief pause if no data to prevent busy waiting (unlikely when busy)
+        if (UNLIKELY(!hadData)) {
             HighResTimer::sleepMicros(10); // 10 microseconds
         }
     }
@@ -173,8 +180,8 @@ void AsyncCSVLogger::logThreadFunction() {
     // Process remaining data before shutdown
     TickerData data;
     while (m_logQueue.pop(data)) {
-        if (m_file.is_open()) {
-            if (!m_headersWritten.load()) {
+        if (LIKELY(m_file.is_open())) {
+            if (UNLIKELY(!m_headersWritten.load())) {
                 writeHeaders();
             }
             csvLine = formatToCSV(data);
@@ -182,7 +189,7 @@ void AsyncCSVLogger::logThreadFunction() {
         }
     }
     
-    if (m_file.is_open()) {
+    if (LIKELY(m_file.is_open())) {
         m_file.flush();
     }
 }
@@ -230,16 +237,19 @@ std::string AsyncCSVLogger::formatToCSV(const TickerData& data) const {
 }
 
 bool AsyncCSVLogger::logTickerData(const TickerData& data) {
-    if (!m_ready.load()) {
+    // Ready check - unlikely to be false after initialization
+    if (UNLIKELY(!m_ready.load())) {
         return false;
     }
     
     // Non-blocking push to SPSC queue (never blocks)
-    return m_logQueue.push(data);
+    // Push success is likely in normal operation
+    return LIKELY(m_logQueue.push(data));
 }
 
 bool AsyncCSVLogger::logTickerDataWithTimestamp(const TickerData& data, int64_t timestampMicros) {
-    if (!m_ready.load()) {
+    // Ready check - unlikely to be false after initialization
+    if (UNLIKELY(!m_ready.load())) {
         return false;
     }
     

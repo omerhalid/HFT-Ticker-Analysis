@@ -16,6 +16,7 @@
 #include <memory>
 #include <cstddef>
 #include <cstdint>
+#include "BranchPrediction.h"
 
 #ifdef __linux__
 #include <numa.h>
@@ -87,7 +88,8 @@ public:
         const size_t next_tail = (current_tail + 1) & (Size - 1); // Fast modulo for power of 2
         
         // Acquire barrier: ensure we see the latest head value
-        if (next_tail == m_head.load(std::memory_order_acquire)) {
+        // Buffer full is unlikely in normal operation
+        if (UNLIKELY(next_tail == m_head.load(std::memory_order_acquire))) {
             return false; // Buffer full
         }
         
@@ -108,7 +110,8 @@ public:
         const size_t current_tail = m_tail.load(std::memory_order_relaxed);
         const size_t next_tail = (current_tail + 1) & (Size - 1);
         
-        if (next_tail == m_head.load(std::memory_order_acquire)) {
+        // Buffer full is unlikely in normal operation
+        if (UNLIKELY(next_tail == m_head.load(std::memory_order_acquire))) {
             return false;
         }
         
@@ -131,7 +134,8 @@ public:
         const size_t current_head = m_head.load(std::memory_order_relaxed);
         
         // Acquire barrier: ensure we see the latest tail value
-        if (current_head == m_tail.load(std::memory_order_acquire)) {
+        // Buffer empty is unlikely when actively consuming
+        if (UNLIKELY(current_head == m_tail.load(std::memory_order_acquire))) {
             return false; // Buffer empty
         }
         
@@ -148,8 +152,8 @@ public:
      * @return True if empty, false otherwise
      */
     bool empty() const noexcept {
-        return m_head.load(std::memory_order_acquire) == 
-               m_tail.load(std::memory_order_acquire);
+        return LIKELY(m_head.load(std::memory_order_acquire) == 
+                      m_tail.load(std::memory_order_acquire));
     }
     
     /**
@@ -159,7 +163,7 @@ public:
     bool full() const noexcept {
         const size_t current_tail = m_tail.load(std::memory_order_acquire);
         const size_t next_tail = (current_tail + 1) & (Size - 1);
-        return next_tail == m_head.load(std::memory_order_acquire);
+        return UNLIKELY(next_tail == m_head.load(std::memory_order_acquire));
     }
     
     /**
