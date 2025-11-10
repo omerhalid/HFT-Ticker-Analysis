@@ -1,71 +1,141 @@
 /**
  * @file ThreadUtils.cpp
- * @brief Thread optimization utilities
+ * @brief Implementation of HFT-grade thread optimization utilities
  */
 
 #include "ThreadUtils.h"
 
 #ifdef __linux__
+
 #include <sched.h>
 #include <sys/prctl.h>
 #include <pthread.h>
-#elif __APPLE__
-#include <mach/thread_policy.h>
-#include <mach/thread_act.h>
-#include <mach/mach_init.h>
-#include <pthread.h>
-#elif _WIN32
-#include <windows.h>
-#include <processthreadsapi.h>
-#endif
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/resource.h>
+#include "NUMAUtils.h"
 
-bool ThreadUtils::optimizeForHFT(const std::string& threadName, int cpuCore, int priority) {
-    // Set thread name 
-#ifdef __linux__
-    prctl(PR_SET_NAME, threadName.c_str(), 0, 0, 0);
-#elif __APPLE__
-    pthread_setname_np(threadName.c_str());
-#elif _WIN32
-    #ifdef _MSC_VER
-    const std::wstring wname(threadName.begin(), threadName.end());
-    SetThreadDescription(GetCurrentThread(), wname.c_str());
-    #endif
-#endif
+bool ThreadUtils::optimizeForHFT(const std::string& threadName, 
+                                 int cpuCore, 
+                                 int priority,
+                                 int numaNode) {
+    bool success = true;
+    
+    // Set thread name
+    success &= setThreadName(threadName);
+    
+    // Determine CPU core
+    if (cpuCore < 0) {
+        cpuCore = getOptimalCpu();
+    }
+    
+    // Pin to CPU
+    success &= pinToCpu(cpuCore);
+    
+    // Set NUMA memory policy if NUMA is available
+    if (NUMAUtils::isAvailable()) {
+        if (numaNode < 0) {
+            // Determine NUMA node from CPU
+            numaNode = NUMAUtils::getCurrentNode();
+        }
+        NUMAUtils::setMemoryPolicy(numaNode);
+    }
+    
+    // Set real-time priority
+    success &= setRealtimePriority(priority);
+    
+    // Disable CPU migration
+    disableCpuMigration();
+    
+    return success;
+}
 
-    // Set CPU affinity 
-#ifdef __linux__
+bool ThreadUtils::pinToCpu(int cpuCore) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(cpuCore, &cpuset);
-    pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-#elif __APPLE__
-    thread_affinity_policy_data_t policy = { cpuCore };
-    thread_policy_set(mach_thread_self(), THREAD_AFFINITY_POLICY, 
-                     (thread_policy_t)&policy, THREAD_AFFINITY_POLICY_COUNT);
-#elif _WIN32
-    DWORD_PTR mask = 1ULL << cpuCore;
-    SetThreadAffinityMask(GetCurrentThread(), mask);
-#endif
+    
+    return pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset) == 0;
+}
 
-    // Set high priority 
-#ifdef __linux__
+bool ThreadUtils::pinToNUMANode(int numaNode) {
+    if (!NUMAUtils::isAvailable()) {
+        return false;
+    }
+    
+    int cpu = NUMAUtils::getFirstCpuForNode(numaNode);
+    if (cpu < 0) {
+        return false;
+    }
+    
+    return pinToCpu(cpu);
+}
+
+bool ThreadUtils::setThreadName(const std::string& threadName) {
+    // Linux thread names are limited to 15 characters + null terminator
+    std::string name = threadName;
+    if (name.length() > 15) {
+        name = name.substr(0, 15);
+    }
+    
+    return prctl(PR_SET_NAME, name.c_str(), 0, 0, 0) == 0;
+}
+
+bool ThreadUtils::setRealtimePriority(int priority) {
+    // Clamp priority to valid range for SCHED_FIFO
+    if (priority < 1) priority = 1;
+    if (priority > 99) priority = 99;
+    
     struct sched_param param;
     param.sched_priority = priority;
-    sched_setscheduler(0, SCHED_FIFO, &param);
-#elif __APPLE__
-    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
-#elif _WIN32
-    // Windows priority mapping: 99 -> THREAD_PRIORITY_TIME_CRITICAL
-    int winPriority = THREAD_PRIORITY_HIGHEST;
-    if (priority >= 90) {
-        winPriority = THREAD_PRIORITY_TIME_CRITICAL;
-    } else if (priority >= 80) {
-        winPriority = THREAD_PRIORITY_HIGHEST;
-    } else if (priority >= 70) {
-        winPriority = THREAD_PRIORITY_ABOVE_NORMAL;
-    }
-    SetThreadPriority(GetCurrentThread(), winPriority);
-#endif
-
-    return true;
+    
+    return sched_setscheduler(0, SCHED_FIFO, &param) == 0;
 }
+
+bool ThreadUtils::setMaxRealtimePriority() {
+    return setRealtimePriority(99);
+}
+
+bool ThreadUtils::disableCpuMigration() {
+    // Use sched_setaffinity to prevent migration
+    // The kernel will respect the affinity mask
+    cpu_set_t cpuset;
+    if (sched_getaffinity(0, sizeof(cpuset), &cpuset) == 0) {
+        return sched_setaffinity(0, sizeof(cpuset), &cpuset) == 0;
+    }
+    return false;
+}
+
+int ThreadUtils::getCurrentCpu() {
+    return sched_getcpu();
+}
+
+int ThreadUtils::getOptimalCpu(int threadId) {
+    if (NUMAUtils::isAvailable()) {
+        int numaNode = NUMAUtils::getOptimalNode(threadId);
+        int cpu = NUMAUtils::getFirstCpuForNode(numaNode);
+        if (cpu >= 0) {
+            return cpu;
+        }
+    }
+    
+    // Fallback: round-robin across available CPUs
+    int numCpus = sysconf(_SC_NPROCESSORS_ONLN);
+    return threadId % numCpus;
+}
+
+bool ThreadUtils::setCpuAffinity(uint64_t cpuMask) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    
+    for (int cpu = 0; cpu < 64; ++cpu) {
+        if (cpuMask & (1ULL << cpu)) {
+            CPU_SET(cpu, &cpuset);
+        }
+    }
+    
+    return pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset) == 0;
+}
+
+#endif // __linux__
+

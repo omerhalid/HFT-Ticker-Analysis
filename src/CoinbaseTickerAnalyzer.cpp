@@ -5,8 +5,13 @@
 
 #include "CoinbaseTickerAnalyzer.h"
 #include <iostream>
+#include <sstream>
 #include <chrono>
 #include "ThreadUtils.h"
+#include "HighResTimer.h"
+#ifdef __linux__
+#include "NUMAUtils.h"
+#endif
 
 CoinbaseTickerAnalyzer::CoinbaseTickerAnalyzer(const std::string& productId, 
                                              const std::string& csvFilename)
@@ -22,6 +27,11 @@ CoinbaseTickerAnalyzer::~CoinbaseTickerAnalyzer() {
 
 bool CoinbaseTickerAnalyzer::initializeComponents() {
     try {
+        #ifdef __linux__
+        // Initialize NUMA if available
+        NUMAUtils::initialize();
+        #endif
+        
         // Initialize WebSocket client
         m_websocketClient = std::make_unique<WebSocketClient>();
         m_websocketClient->setMessageCallback([this](const std::string& message) {
@@ -31,8 +41,13 @@ bool CoinbaseTickerAnalyzer::initializeComponents() {
         // Initialize EMA calculator
         m_emaCalculator = std::make_unique<EMACalculator>(5); // 5-second interval
         
-        // Initialize async CSV logger
+        #ifdef __linux__
+        // Initialize async CSV logger with NUMA awareness
+        // Auto-select CPU and NUMA node for logging thread
+        m_csvLogger = std::make_unique<AsyncCSVLogger>(m_csvFilename, -1, -1);
+        #else
         m_csvLogger = std::make_unique<AsyncCSVLogger>(m_csvFilename);
+        #endif
         
         if (!m_csvLogger->isReady()) {
             std::cerr << "Failed to initialize CSV logger" << std::endl;
@@ -79,21 +94,32 @@ void CoinbaseTickerAnalyzer::handleWebSocketMessage(const std::string& message) 
 }
 
 void CoinbaseTickerAnalyzer::processDataThread() {
-    // Optimize thread for HFT
+    // Optimize thread for HFT with NUMA awareness
+    // Use CPU 2 (or auto-select based on NUMA topology)
     ThreadUtils::optimizeForHFT("DataProcessor", 2, 99);
     
     while (m_processingEnabled.load()) {
         TickerData data;
+        bool hadData = false;
         
-        // Busy poll for maximum responsiveness
+        // Batch process for efficiency
         while (m_processingEnabled.load()) {
             if (m_dataQueue.pop(data)) {
                 processTickerData(data);
+                hadData = true;
             } else {
-                // No data available, yield briefly to prevent busy waiting
-                std::this_thread::yield();
                 break;
             }
+        }
+        
+        // Brief pause if no data to prevent busy waiting
+        if (!hadData) {
+            // Use high-resolution sleep for microsecond precision
+            #ifdef __linux__
+            HighResTimer::sleepMicros(10); // 10 microseconds
+            #else
+            std::this_thread::yield();
+            #endif
         }
     }
 }
@@ -143,7 +169,11 @@ bool CoinbaseTickerAnalyzer::start() {
     }
     
     // Wait a moment for connection to establish
+    #ifdef __linux__
+    HighResTimer::sleepMicros(1000000); // 1 second in microseconds
+    #else
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    #endif
     
     // Subscribe to ticker channel
     if (!m_websocketClient->subscribeToTicker(m_productId)) {

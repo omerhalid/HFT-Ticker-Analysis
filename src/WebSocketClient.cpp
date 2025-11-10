@@ -10,6 +10,7 @@
 #include <cstring>
 #include "JSONParser.h"
 #include "ThreadUtils.h"
+#include "HighResTimer.h"
 
 // Static instance for callback access
 static WebSocketClient* g_instance = nullptr;
@@ -167,8 +168,10 @@ bool WebSocketClient::subscribeToTicker(const std::string& productId) {
 }
 
 void WebSocketClient::runIO() {
-    // Optimize thread for HFT
+    #ifdef __linux__
+    // Optimize thread for HFT with NUMA awareness
     ThreadUtils::optimizeForHFT("WebSocketIO", 1, 99);
+    #endif
     
     while (m_running.load()) {
         // Zero timeout for maximum responsiveness
@@ -178,9 +181,13 @@ void WebSocketClient::runIO() {
             break;
         }
         
-        // Yield CPU if no work to prevent busy waiting
+        // Brief pause if no work to prevent busy waiting
         if (result == 0) {
+            #ifdef __linux__
+            HighResTimer::sleepMicros(10); // 10 microseconds
+            #else
             std::this_thread::yield();
+            #endif
         }
     }
 }
