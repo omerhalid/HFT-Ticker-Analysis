@@ -1,8 +1,10 @@
 /**
  * @file HighResTimer.h
- * @brief High-resolution timing utilities for microsecond-precision latency measurement
+ * @brief HFT-grade high-resolution timing utilities with RDTSC support
  * 
- * Uses CLOCK_MONOTONIC_RAW on Linux for maximum precision without NTP adjustments.
+ * Uses RDTSC (Read Time-Stamp Counter) on x86/x86_64 for cycle-accurate,
+ * ultra-low latency timing. Falls back to CLOCK_MONOTONIC_RAW on Linux
+ * or std::chrono on other platforms.
  */
 
 #ifndef HIGHRESTIMER_H
@@ -15,20 +17,70 @@
 #include <time.h>
 #endif
 
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+#define HAVE_RDTSC 1
+#include <x86intrin.h>
+#endif
+
 /**
- * @brief High-resolution timer for microsecond-precision measurements
+ * @brief HFT-grade high-resolution timer with RDTSC support
  * 
- * Provides nanosecond-precision timestamps using the best available clock
- * source on the platform. On Linux, uses CLOCK_MONOTONIC_RAW for maximum
- * precision without NTP adjustments.
+ * Provides cycle-accurate, nanosecond-precision timestamps using:
+ * - RDTSC on x86/x86_64 (fastest, no system call overhead)
+ * - CLOCK_MONOTONIC_RAW on Linux (fallback)
+ * - std::chrono on other platforms
+ * 
+ * RDTSC is calibrated at startup to convert cycles to nanoseconds.
  */
 class HighResTimer {
+private:
+    static bool s_initialized;
+    static double s_tscFrequencyGHz;  // TSC frequency in GHz
+    static int64_t s_tscOffset;      // Offset for calibration
+    
+    /**
+     * @brief Initialize RDTSC calibration (called once at startup)
+     */
+    static void initializeRDTSC();
+    
+    /**
+     * @brief Read TSC register (x86/x86_64 only)
+     * @return TSC value (cycles)
+     */
+    static inline uint64_t readTSC() {
+#if HAVE_RDTSC
+        return __rdtsc();
+#else
+        return 0;
+#endif
+    }
+    
 public:
+    /**
+     * @brief Initialize timer (call once at startup for RDTSC calibration)
+     */
+    static void initialize();
     /**
      * @brief Get current timestamp in nanoseconds
      * @return Timestamp in nanoseconds since an arbitrary point
+     * 
+     * Uses RDTSC on x86/x86_64 for maximum performance (no system call).
+     * Falls back to clock_gettime(CLOCK_MONOTONIC_RAW) on Linux.
      */
     static int64_t nowNanos();
+    
+    /**
+     * @brief Get current TSC value (cycles) - x86/x86_64 only
+     * @return TSC cycles, or 0 if not available
+     */
+    static uint64_t nowCycles();
+    
+    /**
+     * @brief Convert TSC cycles to nanoseconds
+     * @param cycles TSC cycles
+     * @return Nanoseconds
+     */
+    static int64_t cyclesToNanos(uint64_t cycles);
     
     /**
      * @brief Get current timestamp in microseconds

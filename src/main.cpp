@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <memory>
 #include "CoinbaseTickerAnalyzer.h"
+#include "HighResTimer.h"
 
 // Global analyzer instance for signal handling
 std::unique_ptr<CoinbaseTickerAnalyzer> g_analyzer;
@@ -46,6 +47,9 @@ void printUsage(const char* programName) {
  * @return Exit code
  */
 int main(int argc, char* argv[]) {
+    // Initialize high-resolution timer (calibrates RDTSC)
+    HighResTimer::initialize();
+    
     std::string productId = "BTC-USD";
     std::string outputFile = "ticker_data.csv";
     
